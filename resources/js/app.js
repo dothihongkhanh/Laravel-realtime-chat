@@ -14,7 +14,26 @@ import ChatLayout from './components/ChatLayout.vue';
  * to use in your application's views. An example is included for you.
  */
 
-const app = createApp({});
+const app = createApp({
+    data: () => {
+        return {
+            currentUserLogin: {},
+        };
+    },
+    created() {
+        this.getCurrentUserLogin();
+    },
+    methods: {
+        async getCurrentUserLogin() {
+            try {
+                const response = await axios.get("/getUserLogin");
+                this.currentUserLogin = response.data;
+            } catch (error) {
+                console.log(error);
+            }
+        },
+    },
+});
 app.component('chat-layout', ChatLayout)
 
 /**

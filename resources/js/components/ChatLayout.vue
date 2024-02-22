@@ -1,4 +1,28 @@
 <template>
+    <div class="users-online">
+        <button type="button" class="btn btn-primary">
+            Users online:
+            <span class="badge badge-light">{{ usersOnline }}</span>
+        </button>
+    </div>
+    <div class="btn-logout">
+        <a
+            class="btn btn-danger"
+            href="/logout"
+            onclick="event.preventDefault();document.getElementById('logout-form').submit();"
+        >
+            Logout
+        </a>
+        <form
+            id="logout-form"
+            action="/logout"
+            method="POST"
+            style="display: none"
+        >
+            <input type="hidden" name="_token" :value="csrfToken" />
+        </form>
+    </div>
+
     <div>
         <div class="chat">
             <div class="chat-title">
@@ -6,16 +30,28 @@
             </div>
             <div class="messages">
                 <div class="messages-content">
-                    <ChatItem v-for="n in 30" :key="n"></ChatItem>
+                    <ChatItem
+                        v-for="(message, index) in list_messages"
+                        :key="index"
+                        :message="message"
+                    ></ChatItem>
                 </div>
             </div>
             <div class="message-box">
-                <textarea
+                <input
                     type="text"
+                    v-model="message"
+                    @keyup.enter="sendMessage"
                     class="message-input"
                     placeholder="Type message..."
-                ></textarea>
-                <button type="submit" class="message-submit">Send</button>
+                />
+                <button
+                    type="button"
+                    class="message-submit"
+                    @click="sendMessage"
+                >
+                    Send
+                </button>
             </div>
         </div>
         <div class="bg"></div>
@@ -170,4 +206,79 @@ Message Box
         }
     }
 }
+.users-online {
+    position: absolute;
+    top: 20px;
+    left: 50px;
+    z-index: 3;
+}
+.btn-logout {
+    position: absolute;
+    top: 20px;
+    right: 50px;
+    z-index: 3;
+}
 </style>
+
+<script setup>
+import { ref, onMounted } from "vue";
+import axios from "axios";
+import laravelEchoServer from "../../../laravel-echo-server.json";
+
+const { appId, key } = laravelEchoServer.clients[0];
+const csrfToken = ref("");
+const usersOnline = ref(0);
+const message = ref("");
+const list_messages = ref([]);
+
+// Function to fetch messages from the server
+async function loadMessage() {
+    try {
+        const response = await axios.get("/messages");
+        list_messages.value = response.data;
+    } catch (error) {
+        console.log(error);
+    }
+}
+
+// Function to send a message to the server
+async function sendMessage() {
+    try {
+        const response = await axios.post("/messages", {
+            message: message.value,
+        });
+        list_messages.value.push(response.data.message);
+        message.value = "";
+    } catch (error) {
+        console.log(error);
+    }
+}
+
+// Listening for new messages using Laravel Echo
+Echo.channel("laravel_database_chatroom").listen("MessagePosted", (data) => {
+    const message = data.message;
+    message.user = data.user;
+    list_messages.value.push(message);
+});
+
+// Function to get the number of users online
+async function getUsersOnline() {
+    try {
+        const response = await axios.get(
+            `${window.location.protocol}//${window.location.hostname}:6001/apps/${appId}/channels/laravel_database_chatroom?auth_key=${key}`
+        );
+        usersOnline.value = response.data.subscription_count;
+    } catch (error) {
+        console.log(error);
+    }
+}
+
+// Fetch initial messages and start polling for users online after component is mounted
+onMounted(async () => {
+    csrfToken.value = document.head.querySelector(
+        'meta[name="csrf-token"]'
+    ).content;
+    loadMessage();
+    setInterval(getUsersOnline, 3000); // Poll every 3 seconds
+});
+</script>
